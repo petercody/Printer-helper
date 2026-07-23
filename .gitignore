@@ -1,0 +1,19 @@
+# Dependencies (reinstalled with `npm install`)
+node_modules
+
+# Build output (the packaged Windows installer / app)
+dist
+out
+
+# Local config & secrets
+.env
+.env.local
+config.env
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS cruft
+.DS_Store
+Thumbs.db
