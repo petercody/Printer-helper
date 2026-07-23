@@ -61,18 +61,18 @@ On first launch the app writes a config file to your Windows user profile:
 %APPDATA%\raw-print\config.env
 ```
 
-Right-click the tray icon → **Edit configuration…** to open it. Set your default
-printers (exact names, comma-separated, in order), the port, and allowed origins:
+Right-click the tray icon → **Edit configuration…** to open it. The only
+settings are the port and allowed origins:
 
 ```
-PRINTERS=Front Desk Printer,Kitchen Printer,Receipt Printer
 PORT=9100
 ALLOWED_ORIGIN=*
 ```
 
-Then use **Restart agent** from the tray menu (or the Restart button in the
-window) to apply changes. The window's printer list shows which detected
-printers are marked as defaults.
+Printers are auto-detected — you don't configure them here. Your app chooses
+which file goes to which printer per request (see `README.md`). Use **Restart
+agent** from the tray menu (or the Restart button in the window) to apply
+changes. The window lists all detected printers.
 
 ---
 

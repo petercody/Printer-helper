@@ -26,22 +26,17 @@ npm install
 npm run printers
 ```
 
-Copy the exact names it prints.
+Copy the exact names it prints — you'll pass these per request (see Endpoints).
+The agent auto-detects installed printers; you don't configure them anywhere.
 
-## 3. Configure
+## 3. Configure (optional)
 
 ```bash
 cp .env.example .env
 ```
 
-Edit `.env` and set `PRINTERS` to a comma-separated list of the exact names
-from step 2, in the order you want files matched to them, e.g.:
-
-```
-PRINTERS=Front Desk Printer,Kitchen Printer,Receipt Printer
-```
-
-This list can be any length — one printer, two, five, however many you have.
+The only settings are `PORT` and `ALLOWED_ORIGIN`. Printers are **not** set here —
+your app picks which file goes to which printer on each `/print` request.
 
 ## 4. Run
 
@@ -63,18 +58,21 @@ On Windows you can instead register it as a service with
 | Method | Path        | Purpose                                                        |
 | ------ | ----------- | --------------------------------------------------------------- |
 | GET    | `/health`   | Check the agent is up.                                          |
-| GET    | `/printers` | List installed printer names.                                   |
-| POST   | `/print`    | Multipart upload of any number of `files`; prints each in order. |
+| GET    | `/printers` | List installed printer names (auto-detected).                   |
+| POST   | `/print`    | Multipart upload of any number of `files`; prints each one.     |
 
-`POST /print` takes:
+`POST /print` (multipart/form-data) takes:
 
 - `files` — one or more file fields (repeat the same field name for each file).
-- `printers` *(optional)* — a JSON array of printer names, in the same order
-  as the files, e.g. `["Front Desk Printer","Kitchen Printer"]`. If omitted,
-  the `PRINTERS` list from `.env` is used, sliced to the number of files sent.
+- `jobs` *(recommended)* — a JSON array of `{ file, printer }` objects, where
+  `file` matches an uploaded filename, e.g.
+  `[{"file":"order.pdf","printer":"Front Desk Printer"}]`. Each file is routed
+  to its printer by filename, so array order doesn't matter.
+- `printers` *(alternative)* — a JSON array of printer names, positional (same
+  order as the files), e.g. `["Front Desk Printer","Kitchen Printer"]`.
 
-The number of files/printers is dynamic — send one, two, or ten; the agent
-just pairs each file with the printer at the same position.
+Send one printer per file — one, two, or ten. Printer names must match what
+`/printers` reports. There is no default printer; every request specifies its own.
 
 ### Quick manual test
 

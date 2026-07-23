@@ -104,10 +104,8 @@
     <script>
       const $ = (id) => document.getElementById(id);
       const api = window.rawPrint;
-      let defaults = [];
 
       function applyStatus(s) {
-        defaults = s.defaultPrinters || [];
         $("endpoint").textContent = s.running ? `http://localhost:${s.port}` : `(stopped) :${s.port}`;
         $("version").textContent = s.version || "—";
         const badge = $("badge");
@@ -136,10 +134,7 @@
         ul.innerHTML = "";
         for (const p of printers) {
           const li = document.createElement("li");
-          const isDefault = defaults.includes(p.name);
-          li.innerHTML =
-            `<span class="dot"></span><span>${p.name}</span>` +
-            (isDefault ? '<span class="star">default</span>' : "");
+          li.innerHTML = `<span class="dot"></span><span>${p.name}</span>`;
           ul.appendChild(li);
         }
       }

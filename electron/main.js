@@ -15,7 +15,7 @@ if (!gotLock) {
 }
 
 // User-editable config lives next to the user's data, not inside the app
-// bundle (which is read-only once installed). PRINTERS / PORT / ALLOWED_ORIGIN.
+// bundle (which is read-only once installed). PORT / ALLOWED_ORIGIN.
 const CONFIG_PATH = path.join(app.getPath("userData"), "config.env");
 
 // The rolling in-memory log shown in the window.
@@ -30,7 +30,7 @@ function log(msg) {
 
 let tray = null;
 let win = null;
-let serverInfo = null; // { port, defaultPrinters }
+let serverInfo = null; // { port }
 let startError = null;
 let startServer = null;
 let listPrinters = null;
@@ -42,12 +42,11 @@ function loadConfig() {
       CONFIG_PATH,
       [
         "# raw-print configuration",
-        "# Comma-separated default printer names, in order (optional).",
-        "PRINTERS=",
         "# Port the local agent listens on.",
         "PORT=9100",
         "# Allowed browser origins, or * for any.",
         "ALLOWED_ORIGIN=*",
+        "# Printers are auto-detected and chosen per request — none set here.",
         "",
       ].join("\n"),
       "utf8"
@@ -77,7 +76,6 @@ function getStatus() {
   return {
     running: !!serverInfo && !startError,
     port: serverInfo?.port ?? (Number(process.env.PORT) || 9100),
-    defaultPrinters: serverInfo?.defaultPrinters ?? [],
     error: startError,
     configPath: CONFIG_PATH,
     version: app.getVersion(),

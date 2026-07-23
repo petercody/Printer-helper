@@ -11,16 +11,12 @@ import { listPrinters, printFile } from "./printer.js";
 // that the Electron main process can set/refresh them before booting.
 function readConfig() {
   const port = Number(process.env.PORT) || 9100;
-  const defaultPrinters = (process.env.PRINTERS || "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
   const allowedOrigin = process.env.ALLOWED_ORIGIN || "*";
-  return { port, defaultPrinters, allowedOrigin };
+  return { port, allowedOrigin };
 }
 
 // Build the Express app. Exposed separately so it can be tested or mounted.
-export function createApp({ defaultPrinters = [], allowedOrigin = "*" } = {}) {
+export function createApp({ allowedOrigin = "*" } = {}) {
   const app = express();
   const upload = multer({ dest: os.tmpdir() });
 
@@ -57,13 +53,12 @@ export function createApp({ defaultPrinters = [], allowedOrigin = "*" } = {}) {
         .json({ error: "At least one file is required under the 'files' field." });
     }
 
-    // Resolve `printers[]` (one printer per uploaded file, in order) from any
-    // of three inputs, in priority order:
+    // Resolve `printers[]` (one printer per uploaded file, in order) from one
+    // of two inputs, in priority order:
     //   1. `jobs`     — a JSON array of { file, printer } objects. Each entry's
     //                   printer is matched to the uploaded file with the same
     //                   originalname. This is the recommended shape.
     //   2. `printers` — a JSON array of printer names, positional (file order).
-    //   3. defaults   — the PRINTERS config, sliced to the number of files.
     let printers;
 
     if (body.jobs) {
@@ -110,8 +105,6 @@ export function createApp({ defaultPrinters = [], allowedOrigin = "*" } = {}) {
           error: `'printers' must be a JSON array of printer names, e.g. ["Printer A","Printer B"].`,
         });
       }
-    } else {
-      printers = defaultPrinters.slice(0, files.length);
     }
 
     if (!Array.isArray(printers) || printers.length !== files.length) {
@@ -119,7 +112,7 @@ export function createApp({ defaultPrinters = [], allowedOrigin = "*" } = {}) {
       return res.status(400).json({
         error: `Got ${files.length} file(s) but ${
           Array.isArray(printers) ? printers.length : 0
-        } printer(s). Send one printer per file via 'jobs' or 'printers', or configure enough defaults in the PRINTERS env var.`,
+        } printer(s). Send one printer per file via 'jobs' (recommended) or 'printers'.`,
       });
     }
     if (printers.some((p) => !p || !String(p).trim())) {
@@ -157,23 +150,19 @@ async function cleanup(files) {
 /**
  * Start the print agent HTTP server.
  * @param {(msg: string) => void} [log] optional log sink (defaults to console.log)
- * @returns {Promise<{ server: import('http').Server, port: number, defaultPrinters: string[] }>}
+ * @returns {Promise<{ server: import('http').Server, port: number }>}
  */
 export function startServer(log = console.log) {
-  const { port, defaultPrinters, allowedOrigin } = readConfig();
-  const app = createApp({ defaultPrinters, allowedOrigin });
+  const { port, allowedOrigin } = readConfig();
+  const app = createApp({ allowedOrigin });
 
   return new Promise((resolve, reject) => {
     const server = app.listen(port, () => {
       log(`raw-print agent listening on http://localhost:${port}`);
-      if (defaultPrinters.length) {
-        log(`  default printers (in order): ${defaultPrinters.join(", ")}`);
-      } else {
-        log(
-          `  (no default printers configured — open http://localhost:${port}/printers to see available names, then set PRINTERS, or send a 'printers' field with each request)`
-        );
-      }
-      resolve({ server, port, defaultPrinters });
+      log(
+        `  open http://localhost:${port}/printers to see available printer names; send one printer per file via the 'jobs' field on each request`
+      );
+      resolve({ server, port });
     });
     server.on("error", reject);
   });

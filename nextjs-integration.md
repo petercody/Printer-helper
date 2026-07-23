@@ -14,18 +14,18 @@ const AGENT_URL =
 type PrintJob = {
   file: Blob;
   filename: string;
-  printer?: string; // optional per-call override; otherwise uses .env default at that position
+  printer: string; // which printer this file prints to (required)
 };
 
 export async function printToAgent(jobs: PrintJob[]) {
   const fd = new FormData();
   jobs.forEach((job) => fd.append("files", job.file, job.filename));
 
-  // Only send "printers" if you're overriding — otherwise the agent falls
-  // back to the PRINTERS list configured in its .env, matched by position.
-  if (jobs.every((j) => j.printer)) {
-    fd.append("printers", JSON.stringify(jobs.map((j) => j.printer)));
-  }
+  // Route each file to its printer by filename via the "jobs" field.
+  fd.append(
+    "jobs",
+    JSON.stringify(jobs.map((j) => ({ file: j.filename, printer: j.printer })))
+  );
 
   const res = await fetch(`${AGENT_URL}/print`, {
     method: "POST",
@@ -62,14 +62,12 @@ async function handlePrint() {
 }
 ```
 
-Leaving off `printer` on every job lets the agent use its `.env` `PRINTERS`
-default list instead:
+Populate the printer choices from the agent's auto-detected list
+(`GET /printers`) so users pick real printer names:
 
 ```ts
-await printToAgent([
-  { file: file1, filename: "receipt.pdf" },
-  { file: file2, filename: "label.pdf" },
-]);
+const { printers } = await fetch(`${AGENT_URL}/printers`).then((r) => r.json());
+// printers: [{ name, id }, ...] — use `name` values in your UI dropdown
 ```
 
 ## If your PDFs are generated on the Next.js server
@@ -83,9 +81,9 @@ const [file1, file2, file3] = await Promise.all([
   fetch("/api/print/file3").then((r) => r.blob()),
 ]);
 await printToAgent([
-  { file: file1, filename: "file1.pdf" },
-  { file: file2, filename: "file2.pdf" },
-  { file: file3, filename: "file3.pdf" },
+  { file: file1, filename: "file1.pdf", printer: "Front Desk Printer" },
+  { file: file2, filename: "file2.pdf", printer: "Kitchen Printer" },
+  { file: file3, filename: "file3.pdf", printer: "Receipt Printer" },
 ]);
 ```
 
