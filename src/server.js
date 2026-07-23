@@ -57,8 +57,51 @@ export function createApp({ defaultPrinters = [], allowedOrigin = "*" } = {}) {
         .json({ error: "At least one file is required under the 'files' field." });
     }
 
+    // Resolve `printers[]` (one printer per uploaded file, in order) from any
+    // of three inputs, in priority order:
+    //   1. `jobs`     — a JSON array of { file, printer } objects. Each entry's
+    //                   printer is matched to the uploaded file with the same
+    //                   originalname. This is the recommended shape.
+    //   2. `printers` — a JSON array of printer names, positional (file order).
+    //   3. defaults   — the PRINTERS config, sliced to the number of files.
     let printers;
-    if (body.printers) {
+
+    if (body.jobs) {
+      let jobs;
+      try {
+        jobs = JSON.parse(body.jobs);
+      } catch {
+        await cleanup(files);
+        return res.status(400).json({
+          error: `'jobs' must be a JSON array of { "file": "name.pdf", "printer": "Printer A" } objects.`,
+        });
+      }
+      if (!Array.isArray(jobs) || jobs.length !== files.length) {
+        await cleanup(files);
+        return res.status(400).json({
+          error: `Got ${files.length} file(s) but ${
+            Array.isArray(jobs) ? jobs.length : 0
+          } job(s). Send one { file, printer } entry per uploaded file.`,
+        });
+      }
+      // Match each uploaded file to its job by filename. Consume matches so
+      // duplicate filenames pair up left-to-right instead of colliding.
+      const remaining = [...jobs];
+      printers = [];
+      for (const f of files) {
+        const idx = remaining.findIndex(
+          (j) => j && j.file === f.originalname
+        );
+        if (idx === -1) {
+          await cleanup(files);
+          return res.status(400).json({
+            error: `No job entry found for uploaded file '${f.originalname}'. Each 'jobs' entry's "file" must match an uploaded filename.`,
+          });
+        }
+        printers.push(remaining[idx].printer);
+        remaining.splice(idx, 1);
+      }
+    } else if (body.printers) {
       try {
         printers = JSON.parse(body.printers);
       } catch {
@@ -76,7 +119,7 @@ export function createApp({ defaultPrinters = [], allowedOrigin = "*" } = {}) {
       return res.status(400).json({
         error: `Got ${files.length} file(s) but ${
           Array.isArray(printers) ? printers.length : 0
-        } printer(s). Send one printer name per file (in the same order) via 'printers', or configure enough defaults in the PRINTERS env var.`,
+        } printer(s). Send one printer per file via 'jobs' or 'printers', or configure enough defaults in the PRINTERS env var.`,
       });
     }
     if (printers.some((p) => !p || !String(p).trim())) {
