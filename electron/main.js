@@ -83,10 +83,13 @@ function getStatus() {
 }
 
 function trayIconPath() {
-  // A template/PNG icon works for the Windows tray via nativeImage.
-  const png = path.join(__dirname, "assets", "tray.png");
-  const ico = path.join(__dirname, "assets", "icon.ico");
-  return fs.existsSync(ico) ? ico : png;
+  // Windows uses the .ico; macOS/Linux must use a PNG because nativeImage
+  // cannot decode .ico on macOS (an empty image => invisible menu-bar icon).
+  if (process.platform === "win32") {
+    const ico = path.join(__dirname, "assets", "icon.ico");
+    if (fs.existsSync(ico)) return ico;
+  }
+  return path.join(__dirname, "assets", "tray.png");
 }
 
 function refreshTray() {
@@ -193,7 +196,13 @@ app.on("before-quit", () => {
 });
 
 app.whenReady().then(async () => {
-  const img = nativeImage.createFromPath(trayIconPath());
+  let img = nativeImage.createFromPath(trayIconPath());
+  if (!img.isEmpty() && process.platform === "darwin") {
+    // macOS menu-bar icons render at ~16pt and should be template images
+    // so they adapt to light/dark menu bars.
+    img = img.resize({ width: 16, height: 16 });
+    img.setTemplateImage(true);
+  }
   tray = new Tray(img.isEmpty() ? nativeImage.createEmpty() : img);
   tray.setToolTip("raw-print — starting…");
   tray.on("click", showWindow);

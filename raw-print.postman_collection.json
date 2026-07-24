@@ -1,0 +1,112 @@
+{
+  "info": {
+    "name": "raw-print agent",
+    "description": "Sample requests for the local raw-print agent. The agent listens on http://localhost:9100 by default (set by PORT in .env).\n\nSet the `baseUrl` collection variable if you changed the port.\n\nThe main endpoint is POST /print — a multipart/form-data upload of one or more files plus a `jobs` field that pairs each uploaded filename to a printer name.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:9100",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "GET /health",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/health",
+          "host": ["{{baseUrl}}"],
+          "path": ["health"]
+        },
+        "description": "Liveness check. Returns { \"ok\": true, \"service\": \"raw-print\" }."
+      },
+      "response": []
+    },
+    {
+      "name": "GET /printers",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/printers",
+          "host": ["{{baseUrl}}"],
+          "path": ["printers"]
+        },
+        "description": "Lists installed printer names. Use these exact names in the `jobs` field of POST /print. Returns { \"printers\": [ ... ] }."
+      },
+      "response": []
+    },
+    {
+      "name": "POST /print (single file)",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "files",
+              "description": "The file to print. Select a file from disk (e.g. receipt.pdf). Its filename must match a `file` entry in `jobs`.",
+              "type": "file",
+              "src": []
+            },
+            {
+              "key": "jobs",
+              "description": "JSON array pairing each uploaded filename to a printer. One entry per file.",
+              "value": "[{\"file\":\"receipt.pdf\",\"printer\":\"Printer A\"}]",
+              "type": "text"
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{baseUrl}}/print",
+          "host": ["{{baseUrl}}"],
+          "path": ["print"]
+        },
+        "description": "Print one file to one printer.\n\nSteps:\n1. In the Body tab, on the `files` row, click the file selector and choose your document.\n2. Make sure the filename you selected exactly matches the `file` value inside `jobs` (edit `jobs` if needed).\n3. Replace \"Printer A\" with a real printer name from GET /printers.\n\nSuccess: { \"ok\": true, \"printed\": [ { \"file\": \"receipt.pdf\", \"printer\": \"Printer A\" } ] }"
+      },
+      "response": []
+    },
+    {
+      "name": "POST /print (multiple files, one printer each)",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "files",
+              "description": "First file to print (e.g. receipt.pdf).",
+              "type": "file",
+              "src": []
+            },
+            {
+              "key": "files",
+              "description": "Second file to print (e.g. label.pdf).",
+              "type": "file",
+              "src": []
+            },
+            {
+              "key": "jobs",
+              "description": "One { file, printer } entry per uploaded file. Each `file` must match an uploaded filename.",
+              "value": "[{\"file\":\"receipt.pdf\",\"printer\":\"Printer A\"},{\"file\":\"label.pdf\",\"printer\":\"Label Printer\"}]",
+              "type": "text"
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{baseUrl}}/print",
+          "host": ["{{baseUrl}}"],
+          "path": ["print"]
+        },
+        "description": "Print several files in one request, sending each to its own printer. Add or remove `files` rows to match the number of `jobs` entries — the agent requires exactly one job per uploaded file.\n\nAlternative to `jobs`: you can instead send a `printers` field as a positional JSON array of printer names, e.g. [\"Printer A\",\"Label Printer\"], matched to files in upload order. `jobs` (matched by filename) is recommended."
+      },
+      "response": []
+    }
+  ]
+}
