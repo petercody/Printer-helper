@@ -10,7 +10,9 @@
     "printers": "node src/list-printers.js",
     "app": "electron .",
     "dist": "electron-builder --win",
-    "pack": "electron-builder --win --dir"
+    "dist:mac": "electron-builder --mac",
+    "pack": "electron-builder --win --dir",
+    "pack:mac": "electron-builder --mac --dir"
   },
   "dependencies": {
     "cors": "^2.8.5",
@@ -46,6 +48,24 @@
         }
       ],
       "icon": "electron/assets/icon.ico"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["universal"]
+        },
+        {
+          "target": "zip",
+          "arch": ["universal"]
+        }
+      ],
+      "icon": "electron/assets/icon.icns",
+      "category": "public.app-category.utilities",
+      "identity": null
+    },
+    "dmg": {
+      "title": "raw-print"
     },
     "nsis": {
       "oneClick": false,
