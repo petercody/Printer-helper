@@ -76,7 +76,7 @@ export function createApp({ allowedOrigin = "*" }: { allowedOrigin?: string } = 
 
   // --- Health check ---------------------------------------------------------
   app.get("/health", (_req, res) => {
-    res.json({ ok: true, service: "raw-print" });
+    res.json({ ok: true, service: "printer-connect" });
   });
 
   // --- Discover printer names -----------------------------------------------
@@ -281,7 +281,7 @@ export function startServer(
 
   return new Promise((resolve, reject) => {
     const server = app.listen(port, () => {
-      log(`raw-print agent listening on http://localhost:${port}`);
+      log(`Printer Connect agent listening on http://localhost:${port}`);
       log(
         `  open http://localhost:${port}/printers to see available printer names; send one printer per file via the 'jobs' field on each request`
       );
@@ -299,7 +299,7 @@ const isDirectRun =
   !!process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
 if (isDirectRun) {
   startServer().catch((err: unknown) => {
-    console.error("Failed to start raw-print agent:", toMessage(err));
+    console.error("Failed to start Printer Connect agent:", toMessage(err));
     process.exit(1);
   });
 }

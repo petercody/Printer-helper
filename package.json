@@ -1,10 +1,10 @@
 {
-  "name": "raw-print",
+  "name": "printer-connect",
   "version": "1.0.0",
   "description": "Local print agent: routes any number of files to named printers, no dialog. Runs as a Windows tray app.",
   "type": "module",
   "main": "dist/electron/main.js",
-  "author": "raw-print",
+  "author": "Printer Connect",
   "scripts": {
     "build": "tsc && node scripts/copy-assets.mjs",
     "typecheck": "tsc --noEmit",
@@ -41,8 +41,8 @@
     "vitest": "^2.1.9"
   },
   "build": {
-    "appId": "com.rawprint.agent",
-    "productName": "raw-print",
+    "appId": "com.printerconnect.agent",
+    "productName": "Printer Connect",
     "asar": true,
     "asarUnpack": [
       "node_modules/pdf-to-printer/**"
@@ -85,7 +85,7 @@
       "identity": null
     },
     "dmg": {
-      "title": "raw-print"
+      "title": "Printer Connect"
     },
     "nsis": {
       "oneClick": false,
@@ -93,7 +93,7 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "raw-print"
+      "shortcutName": "Printer Connect"
     }
   }
 }
