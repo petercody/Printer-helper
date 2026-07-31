@@ -55,11 +55,12 @@ On Windows you can instead register it as a service with
 
 ## Endpoints
 
-| Method | Path        | Purpose                                                        |
-| ------ | ----------- | --------------------------------------------------------------- |
-| GET    | `/health`   | Check the agent is up.                                          |
-| GET    | `/printers` | List installed printer names (auto-detected).                   |
-| POST   | `/print`    | Multipart upload of any number of `files`; prints each one.     |
+| Method | Path         | Purpose                                                                   |
+| ------ | ------------ | ------------------------------------------------------------------------- |
+| GET    | `/health`    | Check the agent is up.                                                     |
+| GET    | `/printers`  | List installed printer names (auto-detected).                             |
+| POST   | `/print`     | Multipart upload of any number of `files` (PDFs); renders and prints each. |
+| POST   | `/print-raw` | JSON — sends ZPL / SBPL / EPL / ESC-POS bytes to the printer verbatim.     |
 
 `POST /print` (multipart/form-data) takes:
 
@@ -73,6 +74,37 @@ On Windows you can instead register it as a service with
 
 Send one printer per file — one, two, or ten. Printer names must match what
 `/printers` reports. There is no default printer; every request specifies its own.
+
+### Raw printing — `POST /print-raw` (ZPL / SBPL / EPL / ESC-POS)
+
+Use this for label printers (Zebra = ZPL, SATO = SBPL) that expect command
+bytes rather than a rendered PDF. The bytes are sent to the printer **verbatim**
+— this is the drop-in for QZ Tray's `{ type: 'raw' }` jobs. See
+[`qz-tray-migration.md`](./qz-tray-migration.md) for swapping QZ out.
+
+Body is `application/json`, either a single job or a `jobs` array. Each job needs
+a payload and a target:
+
+- **payload** — `data` (a raw string, e.g. `"^XA...^XZ"` or SBPL) **or**
+  `dataBase64` (base64, for binary payloads).
+- **target** — `printer` (an OS printer name, sent through the spooler with the
+  RAW datatype — QZ Tray's default path) **or** `host` + optional `port`
+  (default `9100`, a direct TCP socket to the printer, no driver needed).
+
+```jsonc
+// by printer name (QZ-style)
+{ "data": "^XA^FO50,50^A0N,40,40^FDHello^FS^XZ", "printer": "Zebra ZTC 105" }
+
+// several labels to one printer
+{ "jobs": [ { "data": "^XA...^XZ", "printer": "Zebra ZTC 105" },
+            { "data": "^XA...^XZ", "printer": "Zebra ZTC 105" } ] }
+
+// direct to a networked printer, no driver installed
+{ "data": "^XA...^XZ", "host": "192.168.1.50", "port": 9100 }
+```
+
+Returns `{ ok: true, printed: [{ target, bytes }] }`. Jobs run sequentially and
+the whole batch is validated before any of it prints.
 
 ### Quick manual test
 

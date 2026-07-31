@@ -5,7 +5,12 @@ import multer from "multer";
 import os from "node:os";
 import fs from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { listPrinters, printFile } from "./printer.js";
+import {
+  listPrinters,
+  printFile,
+  printRawToPrinter,
+  printRawTcp,
+} from "./printer.js";
 
 // Read config from the environment. These are read lazily inside startServer so
 // that the Electron main process can set/refresh them before booting.
@@ -19,6 +24,11 @@ function readConfig() {
 export function createApp({ allowedOrigin = "*" } = {}) {
   const app = express();
   const upload = multer({ dest: os.tmpdir() });
+
+  // Raw jobs arrive as JSON. Generous limit: label payloads with embedded
+  // graphics (e.g. ~GF fields in ZPL) can be large. Only application/json is
+  // parsed here, so multipart uploads to /print are unaffected.
+  app.use(express.json({ limit: "25mb" }));
 
   app.use(
     cors({
@@ -138,6 +148,92 @@ export function createApp({ allowedOrigin = "*" } = {}) {
     }
   });
 
+  // --- Print raw command payloads (ZPL / SBPL / EPL / ESC-POS) ---------------
+  // Sends bytes to the printer verbatim — no PDF rendering. This is the
+  // drop-in for QZ Tray's `{ type: 'raw' }` jobs.
+  //
+  // Body (application/json), either a single job at the top level or a `jobs`
+  // array. Each job needs a payload and a target:
+  //   payload — `data` (a raw string, e.g. "^XA...^XZ") OR
+  //             `dataBase64` (base64, for binary payloads).
+  //   target  — `printer` (OS printer name, via the spooler) OR
+  //             `host` + optional `port` (default 9100, direct TCP).
+  //
+  // Examples:
+  //   { "data": "^XA^FO50,50^A0N,40^FDHello^FS^XZ", "printer": "Zebra ZTC" }
+  //   { "jobs": [ { "data": "...", "host": "192.168.1.50", "port": 9100 } ] }
+  app.post("/print-raw", async (req, res) => {
+    const body = req.body || {};
+    const rawJobs = Array.isArray(body.jobs) ? body.jobs : [body];
+
+    if (!rawJobs.length || rawJobs.every((j) => !j || typeof j !== "object")) {
+      return res.status(400).json({
+        error:
+          "Send a job as { data|dataBase64, printer|host } or a 'jobs' array of them.",
+      });
+    }
+
+    // Validate everything up front so we never half-print a batch.
+    const jobs = [];
+    for (let i = 0; i < rawJobs.length; i++) {
+      const j = rawJobs[i] || {};
+      const where = rawJobs.length > 1 ? ` (job ${i})` : "";
+
+      let bytes;
+      if (typeof j.data === "string" && j.data.length) {
+        bytes = Buffer.from(j.data, "utf8");
+      } else if (typeof j.dataBase64 === "string" && j.dataBase64.length) {
+        bytes = Buffer.from(j.dataBase64, "base64");
+        if (!bytes.length) {
+          return res
+            .status(400)
+            .json({ error: `'dataBase64' is not valid base64${where}.` });
+        }
+      } else {
+        return res.status(400).json({
+          error: `Each job needs a non-empty 'data' (string) or 'dataBase64'${where}.`,
+        });
+      }
+
+      const hasPrinter = j.printer && String(j.printer).trim();
+      const hasHost = j.host && String(j.host).trim();
+      if (!hasPrinter && !hasHost) {
+        return res.status(400).json({
+          error: `Each job needs a 'printer' name or a 'host'${where}.`,
+        });
+      }
+
+      if (hasHost) {
+        const port = j.port === undefined ? 9100 : Number(j.port);
+        if (!Number.isInteger(port) || port < 1 || port > 65535) {
+          return res
+            .status(400)
+            .json({ error: `'port' must be 1–65535${where}.` });
+        }
+        jobs.push({ bytes, host: String(j.host).trim(), port });
+      } else {
+        jobs.push({ bytes, printer: String(j.printer).trim() });
+      }
+    }
+
+    try {
+      // Sequential on purpose: avoids driver/socket contention between jobs.
+      const printed = [];
+      for (const job of jobs) {
+        if (job.host) {
+          await printRawTcp(job.bytes, job.host, job.port);
+          printed.push({ target: `${job.host}:${job.port}`, bytes: job.bytes.length });
+        } else {
+          await printRawToPrinter(job.bytes, job.printer);
+          printed.push({ target: job.printer, bytes: job.bytes.length });
+        }
+      }
+      res.json({ ok: true, printed });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   return app;
 }
 
@@ -161,6 +257,9 @@ export function startServer(log = console.log) {
       log(`raw-print agent listening on http://localhost:${port}`);
       log(
         `  open http://localhost:${port}/printers to see available printer names; send one printer per file via the 'jobs' field on each request`
+      );
+      log(
+        `  POST /print for PDFs (rendered) — POST /print-raw for ZPL/SBPL/raw command payloads (sent verbatim)`
       );
       resolve({ server, port });
     });

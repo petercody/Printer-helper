@@ -84,5 +84,6 @@ changes. The window lists all detected printers.
   **Quit raw-print** to stop it fully.
 - `pdf-to-printer`'s bundled silent-print helper is unpacked from the app
   archive (`asarUnpack`) so printing works from the installed build.
-- The HTTP API (`/health`, `/printers`, `/print`) is unchanged — see
-  `README.md` and `nextjs-integration.md` for wiring it into your app.
+- The HTTP API (`/health`, `/printers`, `/print`, `/print-raw`) is unchanged —
+  see `README.md` and `nextjs-integration.md` for wiring it into your app, and
+  `qz-tray-migration.md` for replacing QZ Tray with `/print-raw` (ZPL/SBPL).

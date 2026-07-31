@@ -107,6 +107,44 @@
         "description": "Print several files in one request, sending each to its own printer. Add or remove `files` rows to match the number of `jobs` entries — the agent requires exactly one job per uploaded file.\n\nAlternative to `jobs`: you can instead send a `printers` field as a positional JSON array of printer names, e.g. [\"Printer A\",\"Label Printer\"], matched to files in upload order. `jobs` (matched by filename) is recommended."
       },
       "response": []
+    },
+    {
+      "name": "POST /print-raw (ZPL/SBPL by printer name)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"data\": \"^XA^FO50,50^A0N,40,40^FDraw-print test^FS^XZ\",\n  \"printer\": \"Printer A\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/print-raw",
+          "host": ["{{baseUrl}}"],
+          "path": ["print-raw"]
+        },
+        "description": "Send raw command bytes (ZPL/SBPL/EPL/ESC-POS) verbatim to a named OS printer via the spooler's RAW datatype. This is the QZ Tray replacement.\n\nReplace \"Printer A\" with a real name from GET /printers, and `data` with your ZPL/SBPL. For binary payloads use `dataBase64` instead of `data`.\n\nSuccess: { \"ok\": true, \"printed\": [ { \"target\": \"Printer A\", \"bytes\": 44 } ] }"
+      },
+      "response": []
+    },
+    {
+      "name": "POST /print-raw (direct to host:port)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"jobs\": [\n    { \"data\": \"^XA^FO50,50^A0N,40,40^FDlabel 1^FS^XZ\", \"host\": \"192.168.1.50\", \"port\": 9100 },\n    { \"data\": \"^XA^FO50,50^A0N,40,40^FDlabel 2^FS^XZ\", \"host\": \"192.168.1.50\", \"port\": 9100 }\n  ]\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/print-raw",
+          "host": ["{{baseUrl}}"],
+          "path": ["print-raw"]
+        },
+        "description": "Stream raw bytes straight to a networked label printer over TCP — no driver installed needed. `port` defaults to 9100 if omitted. Use a `jobs` array to send several labels in one request; they print sequentially."
+      },
+      "response": []
     }
   ]
 }

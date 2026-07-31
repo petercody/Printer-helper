@@ -7,90 +7,122 @@
     <style>
       body { font: 15px/1.5 system-ui, sans-serif; max-width: 560px; margin: 40px auto; padding: 0 16px; color: #1a1a1a; }
       h1 { font-size: 20px; }
-      label { display: block; margin: 14px 0 4px; font-weight: 600; }
-      input[type="text"], input[type="file"] { width: 100%; padding: 8px; box-sizing: border-box; }
+      label { display: block; margin: 16px 0 4px; font-weight: 600; }
+      input[type="text"], input[type="file"], select, textarea {
+        width: 100%; padding: 8px; box-sizing: border-box; font: inherit;
+      }
+      textarea { font-family: ui-monospace, monospace; }
       button { margin-top: 18px; padding: 10px 18px; font-size: 15px; cursor: pointer; border: 0; border-radius: 6px; background: #1a1a1a; color: #fff; }
       button.secondary { background: #555; }
       button:disabled { opacity: .5; cursor: default; }
       #out { margin-top: 18px; padding: 12px; border-radius: 6px; white-space: pre-wrap; font-family: ui-monospace, monospace; font-size: 13px; }
       .ok { background: #e7f6ec; } .err { background: #fdeaea; }
-      .row { display: flex; gap: 10px; align-items: flex-end; border-top: 1px solid #eee; padding-top: 10px; margin-top: 10px; }
-      .row > div { flex: 1; }
-      .row button.remove { margin-top: 0; padding: 8px 10px; background: #b00020; }
       small { color: #666; }
+      .seg { display: inline-flex; margin-top: 4px; border: 1px solid #ccc; border-radius: 6px; overflow: hidden; }
+      .seg button { margin: 0; border-radius: 0; background: #fff; color: #1a1a1a; padding: 8px 20px; }
+      .seg button.active { background: #1a1a1a; color: #fff; }
+      .hidden { display: none; }
     </style>
   </head>
   <body>
     <h1>raw-print · test client</h1>
-    <p><small>Open this page on the machine connected to the printers. Add one row per file/printer — any number works.</small></p>
+    <p><small>Open this page on the machine connected to the printers.</small></p>
 
     <label>Agent URL</label>
     <input id="url" type="text" value="http://localhost:9100" />
 
-    <div id="rows"></div>
+    <label>Send</label>
+    <div class="seg" id="mode">
+      <button data-mode="pdf" class="active" type="button">PDF</button>
+      <button data-mode="raw" type="button">RAW (ZPL/SBPL)</button>
+    </div>
 
-    <button id="addRow" class="secondary" type="button">+ Add another file</button>
-    <button id="go">Print all</button>
-    <button id="list" class="secondary">List printers</button>
+    <label>Printer <small id="printerHint">(loaded from the agent)</small></label>
+    <select id="printer"><option value="">Loading printers…</option></select>
+
+    <div id="pdfPane">
+      <label>File (PDF)</label>
+      <input id="pdfFile" type="file" accept="application/pdf" />
+    </div>
+
+    <div id="rawPane" class="hidden">
+      <label>Raw payload</label>
+      <textarea id="rawData" rows="6">^XA^FO50,50^A0N,40,40^FDraw-print test^FS^XZ</textarea>
+    </div>
+
+    <button id="go">Print</button>
+    <button id="reload" class="secondary" type="button">Reload printers</button>
 
     <div id="out"></div>
 
-    <template id="rowTpl">
-      <div class="row">
-        <div>
-          <label>Printer (optional)</label>
-          <input class="printer" type="text" placeholder="uses .env default if blank" />
-        </div>
-        <div>
-          <label>File (PDF)</label>
-          <input class="file" type="file" accept="application/pdf" />
-        </div>
-        <button class="remove" type="button" title="Remove">✕</button>
-      </div>
-    </template>
-
     <script>
       const $ = (id) => document.getElementById(id);
-      const rows = $("rows");
       const out = $("out");
       const show = (msg, ok) => { out.textContent = msg; out.className = ok ? "ok" : "err"; };
+      const base = () => $("url").value.replace(/\/$/, "");
 
-      function addRow() {
-        const node = $("rowTpl").content.cloneNode(true);
-        node.querySelector(".remove").onclick = (e) => e.target.closest(".row").remove();
-        rows.appendChild(node);
-      }
-      $("addRow").onclick = addRow;
-      addRow();
-      addRow();
+      let mode = "pdf";
 
-      $("list").onclick = async () => {
+      // --- Mode toggle (PDF / RAW) --------------------------------------------
+      $("mode").addEventListener("click", (e) => {
+        const btn = e.target.closest("button[data-mode]");
+        if (!btn) return;
+        mode = btn.dataset.mode;
+        [...$("mode").children].forEach((b) => b.classList.toggle("active", b === btn));
+        $("pdfPane").classList.toggle("hidden", mode !== "pdf");
+        $("rawPane").classList.toggle("hidden", mode !== "raw");
+      });
+
+      // --- Load the printer list from the agent -------------------------------
+      async function loadPrinters() {
+        const sel = $("printer");
+        sel.innerHTML = '<option value="">Loading printers…</option>';
         try {
-          const r = await fetch($("url").value.replace(/\/$/, "") + "/printers");
+          const r = await fetch(base() + "/printers");
           const d = await r.json();
-          if (!r.ok) throw new Error(d.error);
-          show("Printers:\n" + d.printers.map((p) => "  - " + p.name).join("\n"), true);
-        } catch (e) { show("Error: " + e.message, false); }
-      };
+          if (!r.ok) throw new Error(d.error || "Failed to list printers");
+          const names = (d.printers || []).map((p) => p.name);
+          if (!names.length) {
+            sel.innerHTML = '<option value="">No printers found</option>';
+            return;
+          }
+          sel.innerHTML =
+            '<option value="">— select a printer —</option>' +
+            names.map((n) => `<option value="${n.replace(/"/g, "&quot;")}">${n}</option>`).join("");
+        } catch (e) {
+          sel.innerHTML = '<option value="">Agent not reachable</option>';
+          show("Could not load printers: " + e.message, false);
+        }
+      }
+      $("reload").onclick = loadPrinters;
+      $("url").addEventListener("change", loadPrinters);
+      loadPrinters();
 
+      // --- Print --------------------------------------------------------------
       $("go").onclick = async () => {
-        const entries = [...rows.querySelectorAll(".row")].map((row) => ({
-          file: row.querySelector(".file").files[0],
-          printer: row.querySelector(".printer").value.trim(),
-        }));
-        const withFiles = entries.filter((e) => e.file);
-        if (!withFiles.length) return show("Pick at least one file.", false);
+        const printer = $("printer").value;
+        if (!printer) return show("Select a printer first.", false);
 
         const btn = $("go"); btn.disabled = true; show("Printing…", true);
         try {
-          const fd = new FormData();
-          withFiles.forEach((e) => fd.append("files", e.file));
-          // Only send "printers" if every row has one; otherwise fall back to .env defaults.
-          if (withFiles.every((e) => e.printer)) {
-            fd.append("printers", JSON.stringify(withFiles.map((e) => e.printer)));
+          let r, d;
+          if (mode === "pdf") {
+            const file = $("pdfFile").files[0];
+            if (!file) { show("Pick a PDF file.", false); return; }
+            const fd = new FormData();
+            fd.append("files", file);
+            fd.append("jobs", JSON.stringify([{ file: file.name, printer }]));
+            r = await fetch(base() + "/print", { method: "POST", body: fd });
+          } else {
+            const data = $("rawData").value;
+            if (!data) { show("Enter a raw payload.", false); return; }
+            r = await fetch(base() + "/print-raw", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ data, printer }),
+            });
           }
-          const r = await fetch($("url").value.replace(/\/$/, "") + "/print", { method: "POST", body: fd });
-          const d = await r.json();
+          d = await r.json();
           if (!r.ok) throw new Error(d.error);
           show("Sent:\n" + JSON.stringify(d.printed, null, 2), true);
         } catch (e) { show("Error: " + e.message, false); }
