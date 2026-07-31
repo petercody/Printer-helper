@@ -1,4 +1,4 @@
-# Replacing QZ Tray with raw-print
+# Replacing QZ Tray with Printer Connect
 
 Your app already does the hard part: `usePrintFormat` generates finished **SBPL
 strings**, and every print flow ends in the same two calls —
@@ -12,18 +12,18 @@ await printSBPL(printerName, sbplBatch);   // bulk (array of labels)
 ```
 
 So the migration is contained to **one file**: `@/components/custom/print-component`.
-Reimplement `startQZ` and `printSBPL` to call raw-print's `/print-raw` endpoint.
+Reimplement `startQZ` and `printSBPL` to call Printer Connect's `/print-raw` endpoint.
 Nothing in `use-print.ts`, `use-table.tsx`, or your SBPL generators changes.
 
 `printerName` stays exactly what it is today: the **OS printer name**. That's the
-same value QZ Tray used (`qz.configs.create(printerName)`), and raw-print sends
+same value QZ Tray used (`qz.configs.create(printerName)`), and Printer Connect sends
 your bytes to that named printer through the OS spooler using the RAW datatype.
 
 ---
 
 ## The mapping
 
-| QZ Tray                                                   | raw-print                                              |
+| QZ Tray                                                   | Printer Connect                                              |
 | --------------------------------------------------------- | ------------------------------------------------------ |
 | `qz.websocket.connect()`                                  | `GET /health` (or nothing — no handshake needed)       |
 | `qz.printers.find()`                                       | `GET /printers`                                        |
@@ -42,14 +42,14 @@ binary bytes ≥ `0x80`, send `dataBase64` instead of `data`.)
 
 ```ts
 // components/custom/print-component.ts
-// raw-print replacement for QZ Tray. Same exports, same signatures — callers
+// Printer Connect replacement for QZ Tray. Same exports, same signatures — callers
 // (use-print.ts / use-table.tsx) don't change.
 
 const AGENT_URL =
   process.env.NEXT_PUBLIC_PRINT_AGENT_URL ?? 'http://localhost:9100';
 
 /**
- * QZ Tray needed a websocket handshake before printing. raw-print doesn't —
+ * QZ Tray needed a websocket handshake before printing. Printer Connect doesn't —
  * we just confirm the local agent is running so "agent not installed / not
  * started" fails early and clearly, the way a failed qz.websocket.connect() did.
  */
@@ -59,7 +59,7 @@ export async function startQZ(): Promise<void> {
     if (!res.ok) throw new Error(`agent responded ${res.status}`);
   } catch (err) {
     throw new Error(
-      `Print agent not reachable at ${AGENT_URL}. Is raw-print running on this machine? (${
+      `Print agent not reachable at ${AGENT_URL}. Is Printer Connect running on this machine? (${
         err instanceof Error ? err.message : String(err)
       })`
     );
@@ -147,7 +147,7 @@ NEXT_PUBLIC_PRINT_AGENT_URL=http://localhost:9100
 
 ## Checklist
 
-1. Install and run raw-print on the machine the SATO printer is attached to
+1. Install and run Printer Connect on the machine the SATO printer is attached to
    (`npm start`, or the tray app — see `README.md` / `windows-app.md`).
 2. Confirm the printer name: open `http://localhost:9100/printers`. It must match
    the `printerName` your store sends.

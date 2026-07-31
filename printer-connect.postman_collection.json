@@ -1,7 +1,7 @@
 {
   "info": {
-    "name": "raw-print agent",
-    "description": "Sample requests for the local raw-print agent. The agent listens on http://localhost:9100 by default (set by PORT in .env).\n\nSet the `baseUrl` collection variable if you changed the port.\n\nThe main endpoint is POST /print — a multipart/form-data upload of one or more files plus a `jobs` field that pairs each uploaded filename to a printer name.",
+    "name": "Printer Connect agent",
+    "description": "Sample requests for the local Printer Connect agent. The agent listens on http://localhost:9100 by default (set by PORT in .env).\n\nSet the `baseUrl` collection variable if you changed the port.\n\nThe main endpoint is POST /print — a multipart/form-data upload of one or more files plus a `jobs` field that pairs each uploaded filename to a printer name.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -22,7 +22,7 @@
           "host": ["{{baseUrl}}"],
           "path": ["health"]
         },
-        "description": "Liveness check. Returns { \"ok\": true, \"service\": \"raw-print\" }."
+        "description": "Liveness check. Returns { \"ok\": true, \"service\": \"printer-connect\" }."
       },
       "response": []
     },
@@ -115,7 +115,7 @@
         "header": [{ "key": "Content-Type", "value": "application/json" }],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"data\": \"^XA^FO50,50^A0N,40,40^FDraw-print test^FS^XZ\",\n  \"printer\": \"Printer A\"\n}",
+          "raw": "{\n  \"data\": \"^XA^FO50,50^A0N,40,40^FDPrinter Connect test^FS^XZ\",\n  \"printer\": \"Printer A\"\n}",
           "options": { "raw": { "language": "json" } }
         },
         "url": {

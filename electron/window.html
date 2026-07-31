@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>raw-print</title>
+    <title>Printer Connect</title>
     <style>
       :root {
         --bg: #f6f7f9;
@@ -75,7 +75,7 @@
   </head>
   <body>
     <header>
-      <h1>raw-print</h1>
+      <h1>Printer Connect</h1>
       <span id="badge" class="badge">…</span>
     </header>
 
@@ -103,7 +103,7 @@
 
     <script>
       const $ = (id) => document.getElementById(id);
-      const api = window.rawPrint;
+      const api = window.printerConnect;
 
       function applyStatus(s) {
         $("endpoint").textContent = s.running ? `http://localhost:${s.port}` : `(stopped) :${s.port}`;

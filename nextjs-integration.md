@@ -1,4 +1,4 @@
-# Wiring raw-print into your Next.js app
+# Wiring Printer Connect into your Next.js app
 
 Your Print button currently generates one or more files and downloads them.
 Replace the download step with a call to the agent. This code runs in the

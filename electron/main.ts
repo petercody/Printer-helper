@@ -72,7 +72,7 @@ function loadConfig(): void {
     fs.writeFileSync(
       CONFIG_PATH,
       [
-        "# raw-print configuration",
+        "# Printer Connect configuration",
         "# Port the local agent listens on.",
         "PORT=9100",
         "# Allowed browser origins, or * for any.",
@@ -131,10 +131,10 @@ function refreshTray(): void {
     : startError
     ? `Stopped — ${startError}`
     : "Starting…";
-  tray.setToolTip(`raw-print — ${state}`);
+  tray.setToolTip(`Printer Connect — ${state}`);
 
   const template: MenuItemConstructorOptions[] = [
-    { label: `raw-print ${status.running ? "● running" : "○ stopped"}`, enabled: false },
+    { label: `Printer Connect ${status.running ? "● running" : "○ stopped"}`, enabled: false },
     { label: state, enabled: false },
     { type: "separator" },
     { label: "Open window", click: showWindow },
@@ -150,7 +150,7 @@ function refreshTray(): void {
     { label: "Edit configuration…", click: () => void shell.openPath(CONFIG_PATH) },
     { label: "Restart agent", click: () => void restartAgent() },
     { type: "separator" },
-    { label: "Quit raw-print", click: () => app.quit() },
+    { label: "Quit Printer Connect", click: () => app.quit() },
   ];
   tray.setContextMenu(Menu.buildFromTemplate(template));
 }
@@ -182,7 +182,7 @@ function showWindow(): void {
     minimizable: true,
     maximizable: false,
     fullscreenable: false,
-    title: "raw-print",
+    title: "Printer Connect",
     autoHideMenuBar: true,
     icon: trayIconPath(),
     webPreferences: {
@@ -242,7 +242,7 @@ void app.whenReady().then(async () => {
     img.setTemplateImage(true);
   }
   tray = new Tray(img.isEmpty() ? nativeImage.createEmpty() : img);
-  tray.setToolTip("raw-print — starting…");
+  tray.setToolTip("Printer Connect — starting…");
   tray.on("click", showWindow);
   refreshTray();
 

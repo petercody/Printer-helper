@@ -2,7 +2,7 @@
 // safe bridge to the renderer — no direct Node access in the window.
 const { contextBridge, ipcRenderer } = require("electron");
 
-contextBridge.exposeInMainWorld("rawPrint", {
+contextBridge.exposeInMainWorld("printerConnect", {
   getStatus: () => ipcRenderer.invoke("get-status"),
   listPrinters: () => ipcRenderer.invoke("list-printers"),
   openConfig: () => ipcRenderer.invoke("open-config"),

@@ -212,7 +212,7 @@ public class RawPrinterHelper {
   public static void Send(string printer, byte[] bytes) {
     IntPtr h;
     DOCINFO di = new DOCINFO();
-    di.pDocName = "raw-print";
+    di.pDocName = "Printer Connect";
     di.pDataType = "RAW";
     if (!OpenPrinter(printer, out h, IntPtr.Zero))
       throw new Exception("OpenPrinter failed for '" + printer + "' (" + Marshal.GetLastWin32Error() + ")");

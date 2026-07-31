@@ -1,4 +1,4 @@
-# raw-print
+# Printer Connect
 
 A tiny local print agent. Your Next.js app sends it any number of files; it
 prints each one to its matching printer, silently, no dialog.
@@ -46,11 +46,11 @@ npm start
 
 `npm start` compiles the TypeScript sources to `dist/` and then runs the agent.
 For an auto-reloading dev loop, use `npm run dev` instead. You should see:
-`raw-print agent listening on http://localhost:9100`.
+`Printer Connect agent listening on http://localhost:9100`.
 
 To keep it running permanently in the background, build once (`npm run build`)
 and use a process manager such as [pm2](https://pm2.keymetrics.io/)
-(`npm i -g pm2 && pm2 start dist/src/server.js --name raw-print && pm2 save`).
+(`npm i -g pm2 && pm2 start dist/src/server.js --name printer-connect && pm2 save`).
 On Windows you can instead register it as a service with
 [nssm](https://nssm.cc/) so it starts on boot.
 

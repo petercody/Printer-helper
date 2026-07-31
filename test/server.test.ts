@@ -22,7 +22,7 @@ describe("GET /health", () => {
   it("reports ok", async () => {
     const res = await request(app).get("/health");
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ ok: true, service: "raw-print" });
+    expect(res.body).toEqual({ ok: true, service: "printer-connect" });
   });
 });
 
