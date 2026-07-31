@@ -44,10 +44,13 @@ your app picks which file goes to which printer on each `/print` request.
 npm start
 ```
 
-You should see: `raw-print agent listening on http://localhost:9100`.
+`npm start` compiles the TypeScript sources to `dist/` and then runs the agent.
+For an auto-reloading dev loop, use `npm run dev` instead. You should see:
+`raw-print agent listening on http://localhost:9100`.
 
-To keep it running permanently in the background, use a process manager such
-as [pm2](https://pm2.keymetrics.io/) (`npm i -g pm2 && pm2 start src/server.js --name raw-print && pm2 save`).
+To keep it running permanently in the background, build once (`npm run build`)
+and use a process manager such as [pm2](https://pm2.keymetrics.io/)
+(`npm i -g pm2 && pm2 start dist/src/server.js --name raw-print && pm2 save`).
 On Windows you can instead register it as a service with
 [nssm](https://nssm.cc/) so it starts on boot.
 
@@ -113,6 +116,20 @@ file, pick PDFs, and click Print. If the pages come out, you're done — wire it
 into your app next.
 
 ---
+
+## Development
+
+The agent is written in TypeScript (strict mode) and compiles to `dist/`.
+Request bodies for `/print` and `/print-raw` are validated with
+[zod](https://zod.dev), and all handlers funnel through a central error
+middleware that returns `{ error, code, details? }`.
+
+| Command            | What it does                                          |
+| ------------------ | ----------------------------------------------------- |
+| `npm run build`    | Type-check + compile `src/` and `electron/` to `dist/`. |
+| `npm run typecheck`| Type-check only, no output.                           |
+| `npm run dev`      | Run the server from source with reload (`tsx watch`). |
+| `npm test`         | Run the vitest suite (schemas, routes, TCP printing). |
 
 ## Notes
 

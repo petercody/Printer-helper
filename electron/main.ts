@@ -1,11 +1,42 @@
-import { app, Tray, Menu, BrowserWindow, ipcMain, shell, nativeImage } from "electron";
+import {
+  app,
+  Tray,
+  Menu,
+  BrowserWindow,
+  ipcMain,
+  shell,
+  nativeImage,
+  type MenuItemConstructorOptions,
+} from "electron";
 import path from "node:path";
 import fs from "node:fs";
-import os from "node:os";
 import { fileURLToPath } from "node:url";
 import dotenv from "dotenv";
+import type { Server } from "node:http";
+import type { Printer } from "../src/types.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// Electron's `app` gains a custom `isQuitting` flag we set before quit.
+declare global {
+  namespace Electron {
+    interface App {
+      isQuitting?: boolean;
+    }
+  }
+}
+
+// Types for the lazily-imported server/printer modules.
+type StartServer = (log: (msg: string) => void) => Promise<{ server: Server; port: number }>;
+type ListPrinters = () => Promise<Printer[]>;
+
+interface Status {
+  running: boolean;
+  port: number;
+  error: string | null;
+  configPath: string;
+  version: string;
+}
 
 // --- Single instance: a background agent should only ever run once ----------
 const gotLock = app.requestSingleInstanceLock();
@@ -19,8 +50,8 @@ if (!gotLock) {
 const CONFIG_PATH = path.join(app.getPath("userData"), "config.env");
 
 // The rolling in-memory log shown in the window.
-const logLines = [];
-function log(msg) {
+const logLines: string[] = [];
+function log(msg: string): void {
   const line = `${new Date().toLocaleTimeString()}  ${msg}`;
   logLines.push(line);
   if (logLines.length > 200) logLines.shift();
@@ -28,14 +59,14 @@ function log(msg) {
   if (win && !win.isDestroyed()) win.webContents.send("log", line);
 }
 
-let tray = null;
-let win = null;
-let serverInfo = null; // { port }
-let startError = null;
-let startServer = null;
-let listPrinters = null;
+let tray: Tray | null = null;
+let win: BrowserWindow | null = null;
+let serverInfo: { server: Server; port: number } | null = null;
+let startError: string | null = null;
+let startServer: StartServer | null = null;
+let listPrinters: ListPrinters | null = null;
 
-function loadConfig() {
+function loadConfig(): void {
   // Seed a template config file on first run so users know where to edit.
   if (!fs.existsSync(CONFIG_PATH)) {
     fs.writeFileSync(
@@ -56,33 +87,33 @@ function loadConfig() {
   if (parsed.parsed) Object.assign(process.env, parsed.parsed);
 }
 
-async function boot() {
+async function boot(): Promise<void> {
   loadConfig();
   try {
-    // Import the existing server + printer modules (untouched business logic).
-    ({ startServer } = await import("../src/server.js"));
-    ({ listPrinters } = await import("../src/printer.js"));
+    // Import the compiled server + printer modules (business logic).
+    ({ startServer } = (await import("../src/server.js")) as { startServer: StartServer });
+    ({ listPrinters } = (await import("../src/printer.js")) as { listPrinters: ListPrinters });
     serverInfo = await startServer(log);
     startError = null;
   } catch (err) {
-    startError = err.message;
-    log(`ERROR: could not start agent — ${err.message}`);
+    startError = err instanceof Error ? err.message : String(err);
+    log(`ERROR: could not start agent — ${startError}`);
   }
   refreshTray();
   if (win && !win.isDestroyed()) win.webContents.send("status", getStatus());
 }
 
-function getStatus() {
+function getStatus(): Status {
   return {
     running: !!serverInfo && !startError,
-    port: serverInfo?.port ?? (Number(process.env.PORT) || 9100),
+    port: serverInfo?.port ?? (Number(process.env["PORT"]) || 9100),
     error: startError,
     configPath: CONFIG_PATH,
     version: app.getVersion(),
   };
 }
 
-function trayIconPath() {
+function trayIconPath(): string {
   // Windows uses the .ico; macOS/Linux must use a PNG because nativeImage
   // cannot decode .ico on macOS (an empty image => invisible menu-bar icon).
   if (process.platform === "win32") {
@@ -92,7 +123,7 @@ function trayIconPath() {
   return path.join(__dirname, "assets", "tray.png");
 }
 
-function refreshTray() {
+function refreshTray(): void {
   if (!tray) return;
   const status = getStatus();
   const state = status.running
@@ -102,7 +133,7 @@ function refreshTray() {
     : "Starting…";
   tray.setToolTip(`raw-print — ${state}`);
 
-  const menu = Menu.buildFromTemplate([
+  const template: MenuItemConstructorOptions[] = [
     { label: `raw-print ${status.running ? "● running" : "○ stopped"}`, enabled: false },
     { label: state, enabled: false },
     { type: "separator" },
@@ -116,24 +147,28 @@ function refreshTray() {
         log(`Start on login: ${item.checked ? "enabled" : "disabled"}`);
       },
     },
-    { label: "Edit configuration…", click: () => shell.openPath(CONFIG_PATH) },
-    { label: "Restart agent", click: restartAgent },
+    { label: "Edit configuration…", click: () => void shell.openPath(CONFIG_PATH) },
+    { label: "Restart agent", click: () => void restartAgent() },
     { type: "separator" },
     { label: "Quit raw-print", click: () => app.quit() },
-  ]);
-  tray.setContextMenu(menu);
+  ];
+  tray.setContextMenu(Menu.buildFromTemplate(template));
 }
 
-async function restartAgent() {
+async function restartAgent(): Promise<void> {
   log("Restarting agent…");
   try {
-    if (serverInfo?.server) await new Promise((r) => serverInfo.server.close(r));
-  } catch {}
+    if (serverInfo?.server) {
+      await new Promise<void>((resolve) => serverInfo!.server.close(() => resolve()));
+    }
+  } catch {
+    /* ignore close errors */
+  }
   serverInfo = null;
   await boot();
 }
 
-function showWindow() {
+function showWindow(): void {
   if (win && !win.isDestroyed()) {
     win.show();
     win.focus();
@@ -161,12 +196,13 @@ function showWindow() {
     // Closing the window just hides it — the agent keeps running in the tray.
     if (!app.isQuitting) {
       e.preventDefault();
-      win.hide();
+      win?.hide();
     }
   });
   win.webContents.on("did-finish-load", () => {
+    if (!win || win.isDestroyed()) return;
     win.webContents.send("status", getStatus());
-    logLines.forEach((l) => win.webContents.send("log", l));
+    logLines.forEach((l) => win?.webContents.send("log", l));
   });
 }
 
@@ -174,10 +210,12 @@ function showWindow() {
 ipcMain.handle("get-status", () => getStatus());
 ipcMain.handle("list-printers", async () => {
   try {
-    if (!listPrinters) ({ listPrinters } = await import("../src/printer.js"));
+    if (!listPrinters) {
+      ({ listPrinters } = (await import("../src/printer.js")) as { listPrinters: ListPrinters });
+    }
     return { printers: await listPrinters() };
   } catch (err) {
-    return { printers: [], error: err.message };
+    return { printers: [], error: err instanceof Error ? err.message : String(err) };
   }
 });
 ipcMain.handle("open-config", () => shell.openPath(CONFIG_PATH));
@@ -188,14 +226,14 @@ ipcMain.handle("restart-agent", async () => {
 
 // --- App lifecycle ----------------------------------------------------------
 app.on("second-instance", showWindow);
-app.on("window-all-closed", (e) => {
+app.on("window-all-closed", () => {
   // Do NOT quit when the window closes — this is a tray-resident agent.
 });
 app.on("before-quit", () => {
   app.isQuitting = true;
 });
 
-app.whenReady().then(async () => {
+void app.whenReady().then(async () => {
   let img = nativeImage.createFromPath(trayIconPath());
   if (!img.isEmpty() && process.platform === "darwin") {
     // macOS menu-bar icons render at ~16pt and should be template images

@@ -10,30 +10,45 @@ import { promisify } from "node:util";
 import net from "node:net";
 import path from "node:path";
 import { writeFile, unlink } from "node:fs/promises";
+import { PrintError } from "./errors.js";
+import type { Printer } from "./types.js";
 
 const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);
 const isWindows = platform() === "win32";
 
-let winMod = null;
-async function getWin() {
+// Minimal shape of the parts of `pdf-to-printer` we use. Declared locally so the
+// module can stay a lazy, Windows-only import without leaking its types elsewhere.
+interface WinPrinter {
+  name: string;
+  deviceId?: string;
+}
+interface PdfToPrinter {
+  getPrinters(): Promise<WinPrinter[]>;
+  print(file: string, options: { printer: string }): Promise<void>;
+}
+
+let winMod: PdfToPrinter | null = null;
+async function getWin(): Promise<PdfToPrinter> {
   if (!winMod) {
-    const m = await import("pdf-to-printer");
-    winMod = m.default ?? m;
+    const m = (await import("pdf-to-printer")) as unknown as
+      | PdfToPrinter
+      | { default: PdfToPrinter };
+    winMod = "default" in m ? m.default : m;
   }
   return winMod;
 }
 
-// Wrap a value in single quotes, safely, for a unix shell command.
-function shellQuote(value) {
+/** Wrap a value in single quotes, safely, for a unix shell command. */
+function shellQuote(value: string): string {
   return `'${String(value).replace(/'/g, `'\\''`)}'`;
 }
 
 /**
- * Return the list of printers the OS knows about: [{ name, id }, ...].
- * Run this once to discover the EXACT names to put in your .env file.
+ * Return the list of printers the OS knows about.
+ * Run this once to discover the EXACT names to send in print requests.
  */
-export async function listPrinters() {
+export async function listPrinters(): Promise<Printer[]> {
   if (isWindows) {
     const w = await getWin();
     const printers = await w.getPrinters();
@@ -49,19 +64,21 @@ export async function listPrinters() {
       .filter(Boolean)
       .map((name) => ({ name, id: name }));
   } catch (err) {
-    throw new Error(
-      `Could not list printers via CUPS. Is 'lpstat' installed and are printers configured? (${err.message})`
+    throw new PrintError(
+      `Could not list printers via CUPS. Is 'lpstat' installed and are printers configured? (${
+        err instanceof Error ? err.message : String(err)
+      })`
     );
   }
 }
 
 /**
  * Send a single file to a single named printer.
- * @param {string} filePath   Absolute path to the file (PDF recommended).
- * @param {string} printerName Exact printer name as the OS reports it.
+ * @param filePath    Absolute path to the file (PDF recommended).
+ * @param printerName Exact printer name as the OS reports it.
  */
-export async function printFile(filePath, printerName) {
-  if (!printerName) throw new Error("No printer name provided");
+export async function printFile(filePath: string, printerName: string): Promise<void> {
+  if (!printerName) throw new PrintError("No printer name provided");
 
   if (isWindows) {
     const w = await getWin();
@@ -81,22 +98,26 @@ export async function printFile(filePath, printerName) {
 // SATO = SBPL) expect, and it's exactly what QZ Tray's `{ type: 'raw' }` jobs
 // do. Two ways to reach the printer, matching QZ Tray:
 //   1. By printer name — through the OS spooler using the RAW datatype
-//      (Windows) or `lp -o raw` (CUPS). This is QZ Tray's default path and the
-//      drop-in replacement for it.
+//      (Windows) or `lp -o raw` (CUPS). This is QZ Tray's default path.
 //   2. By host:port — a direct TCP socket to the printer (label printers listen
 //      on port 9100 by default). No driver needs to be installed.
 // ---------------------------------------------------------------------------
 
+function toBytes(data: Buffer | string): Buffer {
+  return Buffer.isBuffer(data) ? data : Buffer.from(String(data), "utf8");
+}
+
 /**
  * Send raw bytes to a named OS printer through the spooler (RAW datatype).
- * @param {Buffer|string} data  The raw command payload (e.g. a ZPL/SBPL string).
- * @param {string} printerName  Exact printer name as `listPrinters()` reports it.
  */
-export async function printRawToPrinter(data, printerName) {
+export async function printRawToPrinter(
+  data: Buffer | string,
+  printerName: string
+): Promise<void> {
   if (!printerName || !String(printerName).trim()) {
-    throw new Error("No printer name provided");
+    throw new PrintError("No printer name provided");
   }
-  const bytes = Buffer.isBuffer(data) ? data : Buffer.from(String(data), "utf8");
+  const bytes = toBytes(data);
 
   if (isWindows) return printRawWindows(bytes, String(printerName).trim());
 
@@ -104,9 +125,7 @@ export async function printRawToPrinter(data, printerName) {
   const tmp = tmpFile();
   await writeFile(tmp, bytes);
   try {
-    await execAsync(
-      `lp -o raw -d ${shellQuote(printerName)} ${shellQuote(tmp)}`
-    );
+    await execAsync(`lp -o raw -d ${shellQuote(printerName)} ${shellQuote(tmp)}`);
   } finally {
     await unlink(tmp).catch(() => {});
   }
@@ -114,31 +133,35 @@ export async function printRawToPrinter(data, printerName) {
 
 /**
  * Stream raw bytes straight to a printer over TCP (default port 9100).
- * @param {Buffer|string} data  The raw command payload.
- * @param {string} host         Printer IP or hostname.
- * @param {number} [port=9100]  TCP port (Zebra/SATO/most label printers: 9100).
- * @param {number} [timeoutMs=10000]
  */
-export function printRawTcp(data, host, port = 9100, timeoutMs = 10000) {
-  if (!host || !String(host).trim()) throw new Error("No host provided");
-  const bytes = Buffer.isBuffer(data) ? data : Buffer.from(String(data), "utf8");
-
-  return new Promise((resolve, reject) => {
+export function printRawTcp(
+  data: Buffer | string,
+  host: string,
+  port = 9100,
+  timeoutMs = 10000
+): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    if (!host || !String(host).trim()) {
+      reject(new PrintError("No host provided"));
+      return;
+    }
+    const bytes = toBytes(data);
     const socket = new net.Socket();
     let settled = false;
-    const done = (err) => {
+    const done = (err?: Error): void => {
       if (settled) return;
       settled = true;
       socket.destroy();
-      err ? reject(err) : resolve();
+      if (err) reject(err);
+      else resolve();
     };
 
     socket.setTimeout(timeoutMs);
     socket.on("timeout", () =>
-      done(new Error(`Timed out talking to ${host}:${port} after ${timeoutMs}ms`))
+      done(new PrintError(`Timed out talking to ${host}:${port} after ${timeoutMs}ms`))
     );
     socket.on("error", (err) =>
-      done(new Error(`TCP print to ${host}:${port} failed: ${err.message}`))
+      done(new PrintError(`TCP print to ${host}:${port} failed: ${err.message}`))
     );
     // Resolve once the bytes are flushed and the connection closes cleanly.
     socket.on("close", (hadError) => {
@@ -153,10 +176,10 @@ export function printRawTcp(data, host, port = 9100, timeoutMs = 10000) {
 
 // Send raw bytes to a Windows printer by name using the spooler's RAW
 // datatype. pdf-to-printer can't do this, so we P/Invoke winspool.drv
-// (OpenPrinter → StartDocPrinter(RAW) → WritePrinter) via a short PowerShell
+// (OpenPrinter -> StartDocPrinter(RAW) -> WritePrinter) via a short PowerShell
 // snippet. Payload and printer name are passed through env vars and a temp
 // file to sidestep any command-line quoting issues.
-async function printRawWindows(bytes, printerName) {
+async function printRawWindows(bytes: Buffer, printerName: string): Promise<void> {
   const tmp = tmpFile();
   await writeFile(tmp, bytes);
 
@@ -227,7 +250,7 @@ $bytes = [System.IO.File]::ReadAllBytes($env:RAWPRINT_FILE)
   }
 }
 
-function tmpFile() {
+function tmpFile(): string {
   return path.join(
     tmpdir(),
     `rawprint-${Date.now()}-${Math.random().toString(36).slice(2)}.prn`

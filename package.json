@@ -3,27 +3,42 @@
   "version": "1.0.0",
   "description": "Local print agent: routes any number of files to named printers, no dialog. Runs as a Windows tray app.",
   "type": "module",
-  "main": "electron/main.js",
+  "main": "dist/electron/main.js",
   "author": "raw-print",
   "scripts": {
-    "start": "node src/server.js",
-    "printers": "node src/list-printers.js",
-    "app": "electron .",
-    "dist": "electron-builder --win",
-    "dist:mac": "electron-builder --mac",
-    "pack": "electron-builder --win --dir",
-    "pack:mac": "electron-builder --mac --dir"
+    "build": "tsc && node scripts/copy-assets.mjs",
+    "typecheck": "tsc --noEmit",
+    "start": "npm run build && node dist/src/server.js",
+    "dev": "tsx watch src/server.ts",
+    "printers": "tsx src/list-printers.ts",
+    "app": "npm run build && electron .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "dist": "npm run build && electron-builder --win",
+    "dist:mac": "npm run build && electron-builder --mac",
+    "pack": "npm run build && electron-builder --win --dir",
+    "pack:mac": "npm run build && electron-builder --mac --dir"
   },
   "dependencies": {
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "multer": "^2.0.1",
-    "pdf-to-printer": "^5.6.0"
+    "pdf-to-printer": "^5.6.0",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^4.17.25",
+    "@types/multer": "^1.4.13",
+    "@types/node": "^20.19.43",
+    "@types/supertest": "^6.0.3",
     "electron": "^31.0.0",
-    "electron-builder": "^24.13.3"
+    "electron-builder": "^24.13.3",
+    "supertest": "^7.2.2",
+    "tsx": "^4.23.1",
+    "typescript": "^5.9.3",
+    "vitest": "^2.1.9"
   },
   "build": {
     "appId": "com.rawprint.agent",
@@ -33,18 +48,19 @@
       "node_modules/pdf-to-printer/**"
     ],
     "files": [
-      "electron/**",
-      "src/**",
+      "dist/**",
       "package.json"
     ],
     "extraMetadata": {
-      "main": "electron/main.js"
+      "main": "dist/electron/main.js"
     },
     "win": {
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "icon": "electron/assets/icon.ico"
@@ -53,11 +69,15 @@
       "target": [
         {
           "target": "dmg",
-          "arch": ["universal"]
+          "arch": [
+            "universal"
+          ]
         },
         {
           "target": "zip",
-          "arch": ["universal"]
+          "arch": [
+            "universal"
+          ]
         }
       ],
       "icon": "electron/assets/icon.icns",
