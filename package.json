@@ -41,6 +41,9 @@
     "vitest": "^2.1.9"
   },
   "build": {
+    "directories": {
+      "output": "release"
+    },
     "appId": "com.printerconnect.agent",
     "productName": "Printer Connect",
     "asar": true,
